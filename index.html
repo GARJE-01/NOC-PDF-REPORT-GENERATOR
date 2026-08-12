@@ -1,0 +1,240 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Site Installation Report Generator</title>
+    <!-- Google Fonts -->
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
+    <!-- jsPDF Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+
+    <div class="app-container">
+        <!-- Main Form Section -->
+        <main id="main-view" class="view">
+            <!-- App Header -->
+            <header class="app-header">
+                <div class="header-icon">📋</div>
+                <h1>SITE INSTALLATION REPORT</h1>
+                <p class="header-subtitle">Field Engineer Site Photo Documentation Utility</p>
+            </header>
+
+            <!-- SOL ID Card -->
+            <section class="card sol-card" id="card-sol">
+                <div class="card-header">
+                    <label for="sol-id" class="input-label">
+                        <span class="label-text">SOL ID</span>
+                        <span class="required-badge">Required</span>
+                    </label>
+                </div>
+                <div class="input-group">
+                    <input 
+                        type="text" 
+                        id="sol-id" 
+                        placeholder="Enter SOL ID (e.g. 1100)" 
+                        autocomplete="off"
+                        inputmode="numeric"
+                        required
+                    />
+                    <span class="sol-valid-icon" id="sol-valid-icon">✓</span>
+                </div>
+                <div class="field-error-msg" id="sol-error-msg">Please enter a valid SOL ID.</div>
+            </section>
+
+            <!-- Photo Checklist Header -->
+            <div class="section-title">
+                <h2>Photo Documentation Checklist</h2>
+                <span class="checklist-count" id="checklist-counter">Required: 0/5</span>
+            </div>
+
+            <!-- Validation Summary Banner -->
+            <div class="validation-banner hidden" id="validation-banner">
+                <div class="validation-title">⚠️ Report incomplete</div>
+                <p>Please complete the following required items before generating the PDF:</p>
+                <ul id="validation-list" class="validation-list"></ul>
+            </div>
+
+            <!-- Categories Container -->
+            <div class="categories-list">
+
+                <!-- 1. Pre-Installation -->
+                <section class="card category-card" id="card-pre_install" data-category="pre_install" data-required="true">
+                    <div class="card-header">
+                        <div class="category-info">
+                            <span class="category-num">1</span>
+                            <span class="category-name">Pre-Installation</span>
+                        </div>
+                        <span class="status-indicator badge-required" id="badge-pre_install">🔴 Required</span>
+                    </div>
+                    <div class="photo-grid" id="grid-pre_install"></div>
+                    <div class="category-actions">
+                        <button class="btn btn-add-photo" onclick="triggerAddPhoto('pre_install')">
+                            <span class="btn-icon">📷</span> Add Photo
+                        </button>
+                    </div>
+                </section>
+
+                <!-- 2. Old Switch -->
+                <section class="card category-card" id="card-old_switch" data-category="old_switch" data-required="true">
+                    <div class="card-header">
+                        <div class="category-info">
+                            <span class="category-num">2</span>
+                            <span class="category-name">Old Switch</span>
+                        </div>
+                        <span class="status-indicator badge-required" id="badge-old_switch">🔴 Required</span>
+                    </div>
+                    <div class="photo-grid" id="grid-old_switch"></div>
+                    <div class="category-actions">
+                        <button class="btn btn-add-photo" onclick="triggerAddPhoto('old_switch')">
+                            <span class="btn-icon">📷</span> Add Photo
+                        </button>
+                    </div>
+                </section>
+
+                <!-- 3. New Switch -->
+                <section class="card category-card" id="card-new_switch" data-category="new_switch" data-required="true">
+                    <div class="card-header">
+                        <div class="category-info">
+                            <span class="category-num">3</span>
+                            <span class="category-name">New Switch</span>
+                        </div>
+                        <span class="status-indicator badge-required" id="badge-new_switch">🔴 Required</span>
+                    </div>
+                    <div class="photo-grid" id="grid-new_switch"></div>
+                    <div class="category-actions">
+                        <button class="btn btn-add-photo" onclick="triggerAddPhoto('new_switch')">
+                            <span class="btn-icon">📷</span> Add Photo
+                        </button>
+                    </div>
+                </section>
+
+                <!-- 4. Post-Installation -->
+                <section class="card category-card" id="card-post_install" data-category="post_install" data-required="true">
+                    <div class="card-header">
+                        <div class="category-info">
+                            <span class="category-num">4</span>
+                            <span class="category-name">Post-Installation</span>
+                        </div>
+                        <span class="status-indicator badge-required" id="badge-post_install">🔴 Required</span>
+                    </div>
+                    <div class="photo-grid" id="grid-post_install"></div>
+                    <div class="category-actions">
+                        <button class="btn btn-add-photo" onclick="triggerAddPhoto('post_install')">
+                            <span class="btn-icon">📷</span> Add Photo
+                        </button>
+                    </div>
+                </section>
+
+                <!-- 5. Sign-Off Report -->
+                <section class="card category-card" id="card-signoff" data-category="signoff" data-required="true">
+                    <div class="card-header">
+                        <div class="category-info">
+                            <span class="category-num">5</span>
+                            <span class="category-name">Sign-Off Report</span>
+                        </div>
+                        <span class="status-indicator badge-required" id="badge-signoff">🔴 Required</span>
+                    </div>
+                    <div class="photo-grid" id="grid-signoff"></div>
+                    <div class="category-actions">
+                        <button class="btn btn-add-photo" onclick="triggerAddPhoto('signoff')">
+                            <span class="btn-icon">📷</span> Add Photo
+                        </button>
+                    </div>
+                </section>
+
+                <!-- 6. Multimeter Reading (Optional) -->
+                <section class="card category-card" id="card-multimeter" data-category="multimeter" data-required="false">
+                    <div class="card-header">
+                        <div class="category-info">
+                            <span class="category-num">6</span>
+                            <span class="category-name">Multimeter Reading</span>
+                        </div>
+                        <span class="status-indicator badge-optional" id="badge-multimeter">🟢 Optional</span>
+                    </div>
+                    <div class="photo-grid" id="grid-multimeter"></div>
+                    <div class="category-actions">
+                        <button class="btn btn-add-photo btn-optional" onclick="triggerAddPhoto('multimeter')">
+                            <span class="btn-icon">📷</span> Add Photo
+                        </button>
+                    </div>
+                </section>
+
+                <!-- 7. Other Photos (Optional) -->
+                <section class="card category-card" id="card-other_photos" data-category="other_photos" data-required="false">
+                    <div class="card-header">
+                        <div class="category-info">
+                            <span class="category-num">7</span>
+                            <span class="category-name">Other Photos</span>
+                        </div>
+                        <span class="status-indicator badge-optional" id="badge-other_photos">🟢 Optional</span>
+                    </div>
+                    <div class="photo-grid" id="grid-other_photos"></div>
+                    <div class="category-actions">
+                        <button class="btn btn-add-photo btn-optional" onclick="triggerAddPhoto('other_photos')">
+                            <span class="btn-icon">📷</span> Add Photo
+                        </button>
+                    </div>
+                </section>
+
+            </div>
+
+            <!-- Sticky Bottom Generate Bar -->
+            <div class="bottom-bar">
+                <div class="status-summary">
+                    <span id="required-progress-text">Required photos completed: <strong>0/5</strong></span>
+                </div>
+                <button id="btn-generate" class="btn btn-generate" onclick="handleGeneratePdf()" disabled>
+                    ⚡ GENERATE PDF
+                </button>
+            </div>
+        </main>
+
+        <!-- Hidden File Inputs -->
+        <input type="file" id="file-input-add" accept="image/*" class="hidden-input" onchange="handleFileSelected(event)">
+        <input type="file" id="file-input-retake" accept="image/*" class="hidden-input" onchange="handleRetakeFileSelected(event)">
+
+        <!-- Success Screen View -->
+        <div id="success-view" class="view hidden">
+            <div class="success-card">
+                <div class="success-icon">✅</div>
+                <h2>Report Generated Successfully</h2>
+                <p class="success-subtitle">PDF is ready for review and sharing</p>
+
+                <div class="pdf-file-badge">
+                    <span class="file-icon">📄</span>
+                    <span id="generated-filename" class="filename-text">sol id 1100.pdf</span>
+                </div>
+
+                <div class="success-actions">
+                    <button class="btn btn-primary btn-large" onclick="downloadPdf()">
+                        📥 Download PDF
+                    </button>
+
+                    <button id="btn-share" class="btn btn-secondary btn-large" onclick="sharePdf()">
+                        📤 Share PDF
+                    </button>
+
+                    <hr class="divider" />
+
+                    <button class="btn btn-outline" onclick="confirmResetReport()">
+                        🔄 Create New Report
+                    </button>
+                </div>
+            </div>
+        </div>
+
+        <!-- Processing Overlay -->
+        <div id="loading-overlay" class="loading-overlay hidden">
+            <div class="spinner"></div>
+            <div class="loading-text" id="loading-text">Compressing photos & creating PDF...</div>
+        </div>
+    </div>
+
+    <script src="script.js"></script>
+</body>
+</html>
