@@ -49,7 +49,7 @@
             <!-- Photo Checklist Header -->
             <div class="section-title">
                 <h2>Photo Documentation Checklist</h2>
-                <span class="checklist-count" id="checklist-counter">Required: 0/5</span>
+                <span class="checklist-count" id="checklist-counter">Required: 0/4</span>
             </div>
 
             <!-- Validation Summary Banner -->
@@ -62,121 +62,70 @@
             <!-- Categories Container -->
             <div class="categories-list">
 
-                <!-- 1. Pre-Installation -->
-                <section class="card category-card" id="card-pre_install" data-category="pre_install" data-required="true">
+                <!-- 1. Sign-Off Report -->
+                <section class="card category-card" id="card-signoff" data-category="signoff">
                     <div class="card-header">
                         <div class="category-info">
                             <span class="category-num">1</span>
-                            <span class="category-name">Pre-Installation</span>
-                        </div>
-                        <span class="status-indicator badge-required" id="badge-pre_install">🔴 Required</span>
-                    </div>
-                    <div class="photo-grid" id="grid-pre_install"></div>
-                    <div class="category-actions">
-                        <button class="btn btn-add-photo" onclick="triggerAddPhoto('pre_install')">
-                            <span class="btn-icon">📷</span> Add Photo
-                        </button>
-                    </div>
-                </section>
-
-                <!-- 2. Old Switch -->
-                <section class="card category-card" id="card-old_switch" data-category="old_switch" data-required="true">
-                    <div class="card-header">
-                        <div class="category-info">
-                            <span class="category-num">2</span>
-                            <span class="category-name">Old Switch</span>
-                        </div>
-                        <span class="status-indicator badge-required" id="badge-old_switch">🔴 Required</span>
-                    </div>
-                    <div class="photo-grid" id="grid-old_switch"></div>
-                    <div class="category-actions">
-                        <button class="btn btn-add-photo" onclick="triggerAddPhoto('old_switch')">
-                            <span class="btn-icon">📷</span> Add Photo
-                        </button>
-                    </div>
-                </section>
-
-                <!-- 3. New Switch -->
-                <section class="card category-card" id="card-new_switch" data-category="new_switch" data-required="true">
-                    <div class="card-header">
-                        <div class="category-info">
-                            <span class="category-num">3</span>
-                            <span class="category-name">New Switch</span>
-                        </div>
-                        <span class="status-indicator badge-required" id="badge-new_switch">🔴 Required</span>
-                    </div>
-                    <div class="photo-grid" id="grid-new_switch"></div>
-                    <div class="category-actions">
-                        <button class="btn btn-add-photo" onclick="triggerAddPhoto('new_switch')">
-                            <span class="btn-icon">📷</span> Add Photo
-                        </button>
-                    </div>
-                </section>
-
-                <!-- 4. Post-Installation -->
-                <section class="card category-card" id="card-post_install" data-category="post_install" data-required="true">
-                    <div class="card-header">
-                        <div class="category-info">
-                            <span class="category-num">4</span>
-                            <span class="category-name">Post-Installation</span>
-                        </div>
-                        <span class="status-indicator badge-required" id="badge-post_install">🔴 Required</span>
-                    </div>
-                    <div class="photo-grid" id="grid-post_install"></div>
-                    <div class="category-actions">
-                        <button class="btn btn-add-photo" onclick="triggerAddPhoto('post_install')">
-                            <span class="btn-icon">📷</span> Add Photo
-                        </button>
-                    </div>
-                </section>
-
-                <!-- 5. Sign-Off Report -->
-                <section class="card category-card" id="card-signoff" data-category="signoff" data-required="true">
-                    <div class="card-header">
-                        <div class="category-info">
-                            <span class="category-num">5</span>
-                            <span class="category-name">Sign-Off Report</span>
+                            <span class="category-name">Sign-off Report</span>
                         </div>
                         <span class="status-indicator badge-required" id="badge-signoff">🔴 Required</span>
                     </div>
-                    <div class="photo-grid" id="grid-signoff"></div>
-                    <div class="category-actions">
-                        <button class="btn btn-add-photo" onclick="triggerAddPhoto('signoff')">
-                            <span class="btn-icon">📷</span> Add Photo
+                    <div class="photo-container" id="grid-signoff"></div>
+                    <div class="category-actions" id="actions-signoff">
+                        <button class="btn btn-add-photo" onclick="triggerUploadPhoto('signoff')">
+                            <span class="btn-icon">📷</span> Take / Upload Photo
                         </button>
                     </div>
                 </section>
 
-                <!-- 6. Multimeter Reading (Optional) -->
-                <section class="card category-card" id="card-multimeter" data-category="multimeter" data-required="false">
+                <!-- 2. Pre-Installation Photo -->
+                <section class="card category-card" id="card-pre_install" data-category="pre_install">
                     <div class="card-header">
                         <div class="category-info">
-                            <span class="category-num">6</span>
-                            <span class="category-name">Multimeter Reading</span>
+                            <span class="category-num">2</span>
+                            <span class="category-name">Pre-Installation Photo</span>
                         </div>
-                        <span class="status-indicator badge-optional" id="badge-multimeter">🟢 Optional</span>
+                        <span class="status-indicator badge-required" id="badge-pre_install">🔴 Required</span>
                     </div>
-                    <div class="photo-grid" id="grid-multimeter"></div>
-                    <div class="category-actions">
-                        <button class="btn btn-add-photo btn-optional" onclick="triggerAddPhoto('multimeter')">
-                            <span class="btn-icon">📷</span> Add Photo
+                    <div class="photo-container" id="grid-pre_install"></div>
+                    <div class="category-actions" id="actions-pre_install">
+                        <button class="btn btn-add-photo" onclick="triggerUploadPhoto('pre_install')">
+                            <span class="btn-icon">📷</span> Take / Upload Photo
                         </button>
                     </div>
                 </section>
 
-                <!-- 7. Other Photos (Optional) -->
-                <section class="card category-card" id="card-other_photos" data-category="other_photos" data-required="false">
+                <!-- 3. Post-Installation Photo -->
+                <section class="card category-card" id="card-post_install" data-category="post_install">
                     <div class="card-header">
                         <div class="category-info">
-                            <span class="category-num">7</span>
-                            <span class="category-name">Other Photos</span>
+                            <span class="category-num">3</span>
+                            <span class="category-name">Post-Installation Photo</span>
                         </div>
-                        <span class="status-indicator badge-optional" id="badge-other_photos">🟢 Optional</span>
+                        <span class="status-indicator badge-required" id="badge-post_install">🔴 Required</span>
                     </div>
-                    <div class="photo-grid" id="grid-other_photos"></div>
-                    <div class="category-actions">
-                        <button class="btn btn-add-photo btn-optional" onclick="triggerAddPhoto('other_photos')">
-                            <span class="btn-icon">📷</span> Add Photo
+                    <div class="photo-container" id="grid-post_install"></div>
+                    <div class="category-actions" id="actions-post_install">
+                        <button class="btn btn-add-photo" onclick="triggerUploadPhoto('post_install')">
+                            <span class="btn-icon">📷</span> Take / Upload Photo
+                        </button>
+                    </div>
+                </section>
+
+                <!-- 4. New Switch Serial Number Photo -->
+                <section class="card category-card" id="card-new_switch_sn" data-category="new_switch_sn">
+                    <div class="card-header">
+                        <div class="category-info">
+                            <span class="category-num">4</span>
+                            <span class="category-name">New Switch Serial Number Photo</span>
+                        </div>
+                        <span class="status-indicator badge-required" id="badge-new_switch_sn">🔴 Required</span>
+                    </div>
+                    <div class="photo-container" id="grid-new_switch_sn"></div>
+                    <div class="category-actions" id="actions-new_switch_sn">
+                        <button class="btn btn-add-photo" onclick="triggerUploadPhoto('new_switch_sn')">
+                            <span class="btn-icon">📷</span> Take / Upload Photo
                         </button>
                     </div>
                 </section>
@@ -186,7 +135,7 @@
             <!-- Sticky Bottom Generate Bar -->
             <div class="bottom-bar">
                 <div class="status-summary">
-                    <span id="required-progress-text">Required photos completed: <strong>0/5</strong></span>
+                    <span id="required-progress-text">Required photos completed: <strong>0/4</strong></span>
                 </div>
                 <button id="btn-generate" class="btn btn-generate" onclick="handleGeneratePdf()" disabled>
                     ⚡ GENERATE PDF
@@ -195,8 +144,7 @@
         </main>
 
         <!-- Hidden File Inputs -->
-        <input type="file" id="file-input-add" accept="image/*" class="hidden-input" onchange="handleFileSelected(event)">
-        <input type="file" id="file-input-retake" accept="image/*" class="hidden-input" onchange="handleRetakeFileSelected(event)">
+        <input type="file" id="file-input-upload" accept="image/*" class="hidden-input" onchange="handleFileSelected(event)">
 
         <!-- Success Screen View -->
         <div id="success-view" class="view hidden">

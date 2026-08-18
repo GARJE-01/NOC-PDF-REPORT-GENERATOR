@@ -282,79 +282,54 @@ body {
     border: 1px solid var(--success-border) !important;
 }
 
-/* Photo Grid */
-.photo-grid {
-    display: grid;
-    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
-    gap: 12px;
+/* Photo Container & Single Photo Preview */
+.photo-container {
     margin-top: 12px;
 }
 
-.photo-grid:empty {
+.photo-container:empty {
     margin-top: 0;
 }
 
-.photo-item {
+.single-photo-card {
     position: relative;
-    background: #f1f5f9;
+    background: #0f172a;
     border-radius: var(--radius-sm);
     border: 1px solid var(--border-color);
     overflow: hidden;
     display: flex;
-    flex-direction: column;
+    justify-content: center;
+    align-items: center;
+    max-height: 280px;
 }
 
-.photo-item img {
+.single-photo-preview {
     width: 100%;
-    height: 110px;
-    object-fit: cover;
+    max-height: 280px;
+    object-fit: contain;
     display: block;
+    background: #0f172a;
 }
 
-.photo-label {
-    position: absolute;
-    top: 6px;
-    left: 6px;
-    background: rgba(15, 23, 42, 0.75);
-    color: #ffffff;
-    font-size: 10px;
-    font-weight: 700;
-    padding: 2px 6px;
-    border-radius: 4px;
-    backdrop-filter: blur(2px);
-}
-
-.photo-item-actions {
+.single-photo-actions {
     display: flex;
-    border-top: 1px solid var(--border-color);
-    background: #ffffff;
+    gap: 10px;
+    margin-top: 10px;
 }
 
-.btn-photo-action {
+.btn-action {
     flex: 1;
-    border: none;
-    padding: 8px 4px;
-    font-size: 11px;
-    font-weight: 700;
-    cursor: pointer;
-    background: #ffffff;
-    transition: background 0.15s ease;
+    height: 42px;
+    font-size: 14px;
 }
 
-.btn-retake {
-    color: var(--warning);
-    border-right: 1px solid var(--border-color);
-}
-
-.btn-retake:hover {
-    background: var(--warning-bg);
-}
-
-.btn-remove {
+.btn-outline-danger {
+    background: transparent;
+    border: 1.5px solid var(--danger-border);
     color: var(--danger);
 }
 
-.btn-remove:hover {
+.btn-outline-danger:hover {
     background: var(--danger-bg);
 }
 

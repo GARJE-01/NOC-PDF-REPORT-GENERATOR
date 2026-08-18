@@ -1,45 +1,37 @@
 /**
- * Site Installation Report Generator - Client-Side JavaScript
- * Field Engineer utility for browser-local PDF generation
+ * Site Installation Report Generator - Customer-End Version
+ * Field Engineer utility for generating high-quality 4-page PDF reports
  */
 
-// Category Configurations
+// Category Configurations (Exact Order for Customer-End Report)
 const CATEGORIES = [
-    { id: 'pre_install', title: '1. PRE-INSTALLATION', name: 'Pre-Installation', required: true },
-    { id: 'old_switch', title: '2. OLD SWITCH', name: 'Old Switch', required: true },
-    { id: 'new_switch', title: '3. NEW SWITCH', name: 'New Switch', required: true },
-    { id: 'post_install', title: '4. POST-INSTALLATION', name: 'Post-Installation', required: true },
-    { id: 'signoff', title: '5. SIGN-OFF REPORT', name: 'Sign-Off Report', required: true },
-    { id: 'multimeter', title: '6. MULTIMETER READING', name: 'Multimeter Reading', required: false },
-    { id: 'other_photos', title: '7. OTHER PHOTOS', name: 'Other Photos', required: false }
+    { id: 'signoff', title: 'SIGN-OFF REPORT', name: 'Sign-off Report', page: 1 },
+    { id: 'pre_install', title: 'PRE-INSTALLATION PHOTO', name: 'Pre-Installation Photo', page: 2 },
+    { id: 'post_install', title: 'POST-INSTALLATION PHOTO', name: 'Post-Installation Photo', page: 3 },
+    { id: 'new_switch_sn', title: 'NEW SWITCH SERIAL NUMBER PHOTO', name: 'New Switch Serial Number Photo', page: 4 }
 ];
 
-// App State
+// App State (Single photo per category)
 let reportState = {
     solId: '',
     photos: {
-        pre_install: [],
-        old_switch: [],
-        new_switch: [],
-        post_install: [],
-        signoff: [],
-        multimeter: [],
-        other_photos: []
+        signoff: null,
+        pre_install: null,
+        post_install: null,
+        new_switch_sn: null
     }
 };
 
 let currentActiveCategory = null;
-let targetRetakeIndex = null;
 let generatedPdfBlob = null;
 let generatedFilename = '';
 
-// DOM Elements
+// Initialize App
 document.addEventListener('DOMContentLoaded', () => {
     initApp();
 });
 
 function initApp() {
-    // SOL ID input listener
     const solInput = document.getElementById('sol-id');
     solInput.addEventListener('input', (e) => {
         reportState.solId = e.target.value.trim();
@@ -47,11 +39,13 @@ function initApp() {
         clearCategoryHighlight('card-sol');
     });
 
+    // Render initial photo containers
+    CATEGORIES.forEach(cat => renderPhotoCard(cat.id));
     updateValidationState();
 }
 
 /**
- * Format device date to DD-MMM-YYYY (e.g. 11-Aug-2026)
+ * Format device date to DD-MMM-YYYY (e.g. 18-Aug-2026)
  */
 function getFormattedDate() {
     const d = new Date();
@@ -63,65 +57,44 @@ function getFormattedDate() {
 }
 
 /**
- * Trigger File Input for adding a photo
+ * Trigger File Input for uploading/replacing photo
  */
-function triggerAddPhoto(categoryId) {
+function triggerUploadPhoto(categoryId) {
     currentActiveCategory = categoryId;
-    targetRetakeIndex = null;
-    const fileInput = document.getElementById('file-input-add');
+    const fileInput = document.getElementById('file-input-upload');
     fileInput.value = '';
     fileInput.click();
 }
 
 /**
- * Trigger File Input for retaking a photo
+ * Read original photo file with maximum quality (No lossy compression or resizing)
  */
-function triggerRetakePhoto(categoryId, index) {
-    currentActiveCategory = categoryId;
-    targetRetakeIndex = index;
-    const fileInput = document.getElementById('file-input-retake');
-    fileInput.value = '';
-    fileInput.click();
+function readPhotoAsDataUrl(file) {
+    return new Promise((resolve, reject) => {
+        const reader = new FileReader();
+        reader.onload = (e) => resolve(e.target.result);
+        reader.onerror = (err) => reject(err);
+        reader.readAsDataURL(file);
+    });
 }
 
 /**
- * Handle new photo selection
+ * Handle photo selection
  */
 async function handleFileSelected(event) {
     const file = event.target.files[0];
     if (!file || !currentActiveCategory) return;
 
-    showLoading(true, 'Compressing photo...');
+    showLoading(true, 'Loading photo...');
     try {
-        const compressedBase64 = await compressImage(file);
-        reportState.photos[currentActiveCategory].push(compressedBase64);
-        renderPhotoGrid(currentActiveCategory);
+        const rawDataUrl = await readPhotoAsDataUrl(file);
+        reportState.photos[currentActiveCategory] = rawDataUrl;
+        renderPhotoCard(currentActiveCategory);
         updateValidationState();
         clearCategoryHighlight(`card-${currentActiveCategory}`);
     } catch (err) {
-        console.error('Error processing photo:', err);
-        alert('Could not process photo. Please try again.');
-    } finally {
-        showLoading(false);
-    }
-}
-
-/**
- * Handle retake photo selection
- */
-async function handleRetakeFileSelected(event) {
-    const file = event.target.files[0];
-    if (!file || !currentActiveCategory || targetRetakeIndex === null) return;
-
-    showLoading(true, 'Compressing replacement photo...');
-    try {
-        const compressedBase64 = await compressImage(file);
-        reportState.photos[currentActiveCategory][targetRetakeIndex] = compressedBase64;
-        renderPhotoGrid(currentActiveCategory);
-        updateValidationState();
-    } catch (err) {
-        console.error('Error processing photo:', err);
-        alert('Could not replace photo. Please try again.');
+        console.error('Error reading photo:', err);
+        alert('Could not read photo file. Please try again.');
     } finally {
         showLoading(false);
     }
@@ -130,83 +103,45 @@ async function handleRetakeFileSelected(event) {
 /**
  * Remove photo from category
  */
-function removePhoto(categoryId, index) {
+function removePhoto(categoryId) {
     if (confirm('Remove this photo?')) {
-        reportState.photos[categoryId].splice(index, 1);
-        renderPhotoGrid(categoryId);
+        reportState.photos[categoryId] = null;
+        renderPhotoCard(categoryId);
         updateValidationState();
     }
 }
 
 /**
- * Compress image using Canvas locally in browser
+ * Render single photo preview card for category
  */
-function compressImage(file, maxDimension = 1200, quality = 0.8) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.readAsDataURL(file);
-        reader.onload = (e) => {
-            const img = new Image();
-            img.src = e.target.result;
-            img.onload = () => {
-                let width = img.width;
-                let height = img.height;
+function renderPhotoCard(categoryId) {
+    const container = document.getElementById(`grid-${categoryId}`);
+    const actionsContainer = document.getElementById(`actions-${categoryId}`);
+    const photoDataUrl = reportState.photos[categoryId];
 
-                // Scale down while maintaining aspect ratio
-                if (width > maxDimension || height > maxDimension) {
-                    if (width > height) {
-                        height = Math.round((height * maxDimension) / width);
-                        width = maxDimension;
-                    } else {
-                        width = Math.round((width * maxDimension) / height);
-                        height = maxDimension;
-                    }
-                }
-
-                const canvas = document.createElement('canvas');
-                canvas.width = width;
-                canvas.height = height;
-                const ctx = canvas.getContext('2d');
-                ctx.drawImage(img, 0, 0, width, height);
-
-                const dataUrl = canvas.toDataURL('image/jpeg', quality);
-                resolve(dataUrl);
-            };
-            img.onerror = (err) => reject(err);
-        };
-        reader.onerror = (err) => reject(err);
-    });
-}
-
-/**
- * Render thumbnails for a category
- */
-function renderPhotoGrid(categoryId) {
-    const grid = document.getElementById(`grid-${categoryId}`);
-    const photos = reportState.photos[categoryId];
-
-    grid.innerHTML = '';
-    photos.forEach((src, idx) => {
-        const item = document.createElement('div');
-        item.className = 'photo-item';
-        item.innerHTML = `
-            <span class="photo-label">Photo ${idx + 1}</span>
-            <img src="${src}" alt="Photo ${idx + 1}" />
-            <div class="photo-item-actions">
-                <button class="btn-photo-action btn-retake" onclick="triggerRetakePhoto('${categoryId}', ${idx})">🔄 Retake</button>
-                <button class="btn-photo-action btn-remove" onclick="removePhoto('${categoryId}', ${idx})">🗑️ Remove</button>
+    if (photoDataUrl) {
+        container.innerHTML = `
+            <div class="single-photo-card">
+                <img src="${photoDataUrl}" alt="Photo Preview" class="single-photo-preview" />
             </div>
         `;
-        grid.appendChild(item);
-    });
-
-    // Update Add Photo button text
-    const card = document.getElementById(`card-${categoryId}`);
-    const addBtn = card.querySelector('.btn-add-photo');
-    if (photos.length > 0) {
-        addBtn.innerHTML = '<span class="btn-icon">➕</span> Add Another Photo';
+        actionsContainer.innerHTML = `
+            <div class="single-photo-actions">
+                <button class="btn btn-secondary btn-action" onclick="triggerUploadPhoto('${categoryId}')">
+                    <span>🔄</span> Replace Photo
+                </button>
+                <button class="btn btn-outline-danger btn-action" onclick="removePhoto('${categoryId}')">
+                    <span>🗑️</span> Remove
+                </button>
+            </div>
+        `;
     } else {
-        addBtn.innerHTML = '<span class="btn-icon">📷</span> Add Photo';
+        container.innerHTML = '';
+        actionsContainer.innerHTML = `
+            <button class="btn btn-add-photo" onclick="triggerUploadPhoto('${categoryId}')">
+                <span class="btn-icon">📷</span> Take / Upload Photo
+            </button>
+        `;
     }
 }
 
@@ -222,63 +157,47 @@ function updateValidationState() {
         solIcon.classList.remove('visible');
     }
 
-    let requiredCompleted = 0;
-    const requiredCategories = CATEGORIES.filter(c => c.required);
+    let completedCount = 0;
 
-    requiredCategories.forEach(cat => {
-        const count = reportState.photos[cat.id].length;
+    CATEGORIES.forEach(cat => {
+        const hasPhoto = reportState.photos[cat.id] !== null;
         const badge = document.getElementById(`badge-${cat.id}`);
-        if (count > 0) {
-            requiredCompleted++;
+        if (hasPhoto) {
+            completedCount++;
             badge.className = 'status-indicator badge-completed';
-            badge.innerHTML = `✅ Complete (${count})`;
+            badge.innerHTML = '✅ Complete';
         } else {
             badge.className = 'status-indicator badge-required';
             badge.innerHTML = '🔴 Required';
         }
     });
 
-    // Optional categories badge update
-    CATEGORIES.filter(c => !c.required).forEach(cat => {
-        const count = reportState.photos[cat.id].length;
-        const badge = document.getElementById(`badge-${cat.id}`);
-        if (count > 0) {
-            badge.className = 'status-indicator badge-completed';
-            badge.innerHTML = `✅ ${count} photo${count > 1 ? 's' : ''}`;
-        } else {
-            badge.className = 'status-indicator badge-optional';
-            badge.innerHTML = '🟢 Optional';
-        }
-    });
-
-    // Counter text
     const counterText = document.getElementById('checklist-counter');
-    counterText.innerText = `Required: ${requiredCompleted}/${requiredCategories.length}`;
+    counterText.innerText = `Required: ${completedCount}/${CATEGORIES.length}`;
 
     const progressSummary = document.getElementById('required-progress-text');
-    progressSummary.innerHTML = `Required photos completed: <strong>${requiredCompleted}/${requiredCategories.length}</strong>`;
+    progressSummary.innerHTML = `Required photos completed: <strong>${completedCount}/${CATEGORIES.length}</strong>`;
 
-    // Enable generate button if SOL ID and all required categories complete
     const btnGenerate = document.getElementById('btn-generate');
-    const allValid = solValid && (requiredCompleted === requiredCategories.length);
+    const allValid = solValid && (completedCount === CATEGORIES.length);
     btnGenerate.disabled = !allValid;
 }
 
 /**
- * Validate missing items and highlight UI if clicked prematurely
+ * Validate missing items and show clear validation banner
  */
 function validateReport() {
     const missing = [];
     const missingCards = [];
 
     if (!reportState.solId) {
-        missing.push('SOL ID');
+        missing.push('Please enter a valid SOL ID.');
         missingCards.push('card-sol');
     }
 
-    CATEGORIES.filter(c => c.required).forEach(cat => {
-        if (reportState.photos[cat.id].length === 0) {
-            missing.push(`${cat.name} photo`);
+    CATEGORIES.forEach(cat => {
+        if (!reportState.photos[cat.id]) {
+            missing.push(`Please upload the ${cat.name}.`);
             missingCards.push(`card-${cat.id}`);
         }
     });
@@ -288,20 +207,18 @@ function validateReport() {
 
     if (missing.length > 0) {
         list.innerHTML = '';
-        missing.forEach(item => {
+        missing.forEach(msg => {
             const li = document.createElement('li');
-            li.innerText = item;
+            li.innerText = msg;
             list.appendChild(li);
         });
         banner.classList.remove('hidden');
 
-        // Highlight missing cards
         missingCards.forEach(cardId => {
             const card = document.getElementById(cardId);
             if (card) card.classList.add('incomplete-highlight');
         });
 
-        // Scroll to banner or first missing card
         banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
         return false;
     }
@@ -313,8 +230,7 @@ function validateReport() {
 function clearCategoryHighlight(cardId) {
     const card = document.getElementById(cardId);
     if (card) card.classList.remove('incomplete-highlight');
-    
-    // Check if banner can be hidden
+
     const banner = document.getElementById('validation-banner');
     if (!banner.classList.contains('hidden')) {
         const remainingHighlights = document.querySelectorAll('.incomplete-highlight');
@@ -325,14 +241,13 @@ function clearCategoryHighlight(cardId) {
 }
 
 /**
- * Generate PDF using jsPDF
+ * Generate PDF using jsPDF (Exactly 4 Pages, High Quality)
  */
 async function handleGeneratePdf() {
     if (!validateReport()) return;
 
-    showLoading(true, 'Generating PDF document...');
+    showLoading(true, 'Building high-quality PDF report...');
     
-    // Brief delay to allow UI loading spinner to render smoothly
     setTimeout(async () => {
         try {
             await createPdf();
@@ -355,166 +270,79 @@ async function createPdf() {
 
     const pageWidth = doc.internal.pageSize.getWidth(); // 210 mm
     const pageHeight = doc.internal.pageSize.getHeight(); // 297 mm
-    const margin = 14;
-    const contentWidth = pageWidth - (margin * 2);
-    let currentY = margin;
-
-    const dateStr = getFormattedDate();
     const solId = reportState.solId;
+    const dateStr = getFormattedDate();
     generatedFilename = `sol id ${solId}.pdf`;
 
-    // Function to print Page Header
-    function printPageHeader() {
-        doc.setFillColor(30, 41, 59); // Deep Slate
-        doc.rect(0, 0, pageWidth, 18, 'F');
-        
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(12);
-        doc.setTextColor(255, 255, 255);
-        doc.text('SITE INSTALLATION REPORT', margin, 12);
-        
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'normal');
-        doc.text(`SOL ID: ${solId}`, pageWidth - margin, 12, { align: 'right' });
-    }
-
-    // Print main document header on first page
-    doc.setFont('helvetica', 'bold');
-    doc.setFontSize(20);
-    doc.setTextColor(15, 23, 42); // slate-900
-    doc.text('SITE INSTALLATION REPORT', margin, currentY + 6);
-    currentY += 14;
-
-    // Subtitle metadata box
-    doc.setFillColor(241, 245, 249); // slate-100
-    doc.roundedRect(margin, currentY, contentWidth, 16, 2, 2, 'F');
-
-    doc.setFontSize(11);
-    doc.setFont('helvetica', 'bold');
-    doc.setTextColor(37, 99, 235); // primary blue
-    doc.text(`SOL ID: ${solId}`, margin + 6, currentY + 10.5);
-
-    doc.setFont('helvetica', 'normal');
-    doc.setTextColor(71, 85, 105); // slate-600
-    doc.text(`Date: ${dateStr}`, pageWidth - margin - 6, currentY + 10.5, { align: 'right' });
-
-    currentY += 24;
-
-    // Process each category
-    for (const cat of CATEGORIES) {
-        const photos = reportState.photos[cat.id];
-        // Skip empty optional sections
-        if (!cat.required && photos.length === 0) {
-            continue;
-        }
-
-        // Check vertical space for Section Header
-        if (currentY + 20 > pageHeight - margin) {
+    // 4 Pages in exact order:
+    // Page 1: Sign-off Report
+    // Page 2: Pre-Installation Photo
+    // Page 3: Post-Installation Photo
+    // Page 4: New Switch Serial Number Photo
+    for (let i = 0; i < CATEGORIES.length; i++) {
+        const cat = CATEGORIES[i];
+        if (i > 0) {
             doc.addPage();
-            printPageHeader();
-            currentY = 26;
         }
 
-        // Section Title Header
-        doc.setFont('helvetica', 'bold');
-        doc.setFontSize(13);
-        doc.setTextColor(15, 23, 42);
-        doc.text(cat.title, margin, currentY);
+        const pageNum = i + 1;
+        const photoDataUrl = reportState.photos[cat.id];
+
+        // Minimal Header Bar
+        doc.setFillColor(30, 41, 59); // Deep Slate
+        doc.rect(0, 0, pageWidth, 12, 'F');
         
-        // Underline section header
-        doc.setDrawColor(226, 232, 240);
-        doc.setLineWidth(0.5);
-        doc.line(margin, currentY + 2, pageWidth - margin, currentY + 2);
+        doc.setFont('helvetica', 'bold');
+        doc.setFontSize(10);
+        doc.setTextColor(255, 255, 255);
+        doc.text(`${pageNum}. ${cat.title}`, 10, 8.5);
+        
+        doc.setFont('helvetica', 'normal');
+        doc.setFontSize(9);
+        doc.text(`SOL ID: ${solId} | Date: ${dateStr}`, pageWidth - 10, 8.5, { align: 'right' });
 
-        currentY += 8;
+        // Printable bounds for full-page photo
+        const marginTop = 15;
+        const marginBottom = 12;
+        const marginSide = 8;
 
-        if (photos.length === 0 && cat.required) {
-            doc.setFont('helvetica', 'italic');
-            doc.setFontSize(10);
-            doc.setTextColor(220, 38, 38);
-            doc.text('No photos provided', margin, currentY + 4);
-            currentY += 12;
-            continue;
-        }
+        const maxImgWidth = pageWidth - (marginSide * 2); // 194 mm
+        const maxImgHeight = pageHeight - marginTop - marginBottom; // 270 mm
 
-        // Calculate photo grid layout in PDF
-        // We will render 2 photos side-by-side if space allows, or 1 large photo
-        const gap = 6;
-        const maxImgWidth = (contentWidth - gap) / 2; // ~89mm per image column
-        const maxImgHeight = 80; // max height per image mm
-
-        for (let i = 0; i < photos.length; i += 2) {
-            const rowPhotos = photos.slice(i, i + 2);
-            let rowMaxHeight = 0;
-
-            // Calculate heights for photos in this row
-            const imageSpecs = await Promise.all(rowPhotos.map(src => getImageDimensions(src)));
+        if (photoDataUrl) {
+            const dimensions = await getImageDimensions(photoDataUrl);
             
-            imageSpecs.forEach(spec => {
-                let w = maxImgWidth;
-                let h = (spec.height * w) / spec.width;
-                if (h > maxImgHeight) {
-                    h = maxImgHeight;
-                    w = (spec.width * h) / spec.height;
-                }
-                if (h > rowMaxHeight) rowMaxHeight = h;
-            });
+            // Maintain exact original aspect ratio
+            let renderW = maxImgWidth;
+            let renderH = (dimensions.height * renderW) / dimensions.width;
 
-            // Check page overflow
-            if (currentY + rowMaxHeight + 10 > pageHeight - margin) {
-                doc.addPage();
-                printPageHeader();
-                currentY = 26;
+            if (renderH > maxImgHeight) {
+                renderH = maxImgHeight;
+                renderW = (dimensions.width * renderH) / dimensions.height;
             }
 
-            // Draw images in row
-            for (let j = 0; j < rowPhotos.length; j++) {
-                const src = rowPhotos[j];
-                const spec = imageSpecs[j];
+            // Center image on page
+            const posX = marginSide + (maxImgWidth - renderW) / 2;
+            const posY = marginTop + (maxImgHeight - renderH) / 2;
 
-                let w = maxImgWidth;
-                let h = (spec.height * w) / spec.width;
-                if (h > maxImgHeight) {
-                    h = maxImgHeight;
-                    w = (spec.width * h) / spec.height;
-                }
-
-                const posX = margin + j * (maxImgWidth + gap);
-                
-                // Draw light photo card background/border
-                doc.setDrawColor(226, 232, 240);
-                doc.setFillColor(250, 250, 250);
-                doc.roundedRect(posX, currentY, maxImgWidth, h, 1.5, 1.5, 'FD');
-
-                // Place image
-                doc.addImage(src, 'JPEG', posX, currentY, w, h);
-            }
-
-            currentY += rowMaxHeight + 8;
+            // Detect image format from data URL (PNG vs JPEG)
+            const imageFormat = photoDataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
+            doc.addImage(photoDataUrl, imageFormat, posX, posY, renderW, renderH);
         }
 
-        currentY += 6; // Spacing after section
-    }
-
-    // Add Page Numbers to all pages
-    const totalPages = doc.internal.getNumberOfPages();
-    for (let i = 1; i <= totalPages; i++) {
-        doc.setPage(i);
+        // Footer Page Numbering (Page X of 4)
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(9);
         doc.setTextColor(148, 163, 184); // slate-400
-        doc.text(`Page ${i} of ${totalPages}`, pageWidth / 2, pageHeight - 8, { align: 'center' });
+        doc.text(`Page ${pageNum} of 4`, pageWidth / 2, pageHeight - 5, { align: 'center' });
     }
 
-    // Output PDF Blob
     generatedPdfBlob = doc.output('blob');
-
-    // Show Success Screen View
     showSuccessScreen();
 }
 
 /**
- * Get natural width/height of base64 image
+ * Get natural dimensions of DataURL image
  */
 function getImageDimensions(src) {
     return new Promise((resolve) => {
@@ -527,7 +355,7 @@ function getImageDimensions(src) {
 }
 
 /**
- * Show Success Screen
+ * Show Success View
  */
 function showSuccessScreen() {
     document.getElementById('main-view').classList.add('hidden');
@@ -537,7 +365,7 @@ function showSuccessScreen() {
 }
 
 /**
- * Download generated PDF
+ * Download PDF
  */
 function downloadPdf() {
     if (!generatedPdfBlob) return;
@@ -550,11 +378,10 @@ function downloadPdf() {
 }
 
 /**
- * Share PDF using Web Share API on mobile
+ * Native Web Share API
  */
 async function sharePdf() {
     if (!generatedPdfBlob) return;
-
     const file = new File([generatedPdfBlob], generatedFilename, { type: 'application/pdf' });
 
     if (navigator.canShare && navigator.canShare({ files: [file] })) {
@@ -567,26 +394,24 @@ async function sharePdf() {
         } catch (err) {
             if (err.name !== 'AbortError') {
                 console.error('Sharing failed:', err);
-                downloadPdf(); // Fallback to download
+                downloadPdf();
             }
         }
     } else {
-        // Fallback for browsers that don't support file sharing
-        alert('File sharing is not directly supported by this browser. Initiating PDF download...');
+        alert('Direct sharing is not supported on this browser. Initiating PDF download...');
         downloadPdf();
     }
 }
 
 /**
- * Reset report for a new site
+ * Reset Form for new report
  */
 function confirmResetReport() {
-    if (confirm('Are you sure you want to create a new report?\nThis will clear current photos and SOL ID.')) {
-        // Reset state
+    if (confirm('Create a new report?\nThis will clear current photos and SOL ID.')) {
         reportState.solId = '';
         CATEGORIES.forEach(cat => {
-            reportState.photos[cat.id] = [];
-            renderPhotoGrid(cat.id);
+            reportState.photos[cat.id] = null;
+            renderPhotoCard(cat.id);
         });
 
         document.getElementById('sol-id').value = '';
@@ -603,7 +428,7 @@ function confirmResetReport() {
 }
 
 /**
- * Show/Hide loading overlay
+ * Loading Overlay
  */
 function showLoading(show, message = 'Processing...') {
     const overlay = document.getElementById('loading-overlay');
