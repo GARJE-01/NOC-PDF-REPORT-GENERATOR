@@ -12,7 +12,9 @@ A mobile-first, 100% client-side web application designed for **Field Engineers 
 
 ## ✨ Features & Customer Report Structure
 
-- **🆔 SOL ID Validation**: Real-time validation for SOL ID input.
+- **🆔 Mandatory Site Metadata**:
+  - **SOL ID**: Required numeric/text identifier.
+  - **Branch Name**: Required branch location name.
 - **📸 4 Mandatory Photo Sections** (Exactly 1 photo per section):
   1. **Page 1**: Sign-off Report (Large, clear, readable format)
   2. **Page 2**: Pre-Installation Photo (Full-page presentation)
@@ -21,9 +23,10 @@ A mobile-first, 100% client-side web application designed for **Field Engineers 
 - **🔍 High-Fidelity Image Preservation**:
   - Preserves original uploaded photo quality without lossy downscaling or aggressive quality reduction.
   - Maintains exact aspect ratio without cropping essential site details or serial numbers.
-- **🔒 100% Privacy & Security**: Zero photos leave the device or browser memory.
+- **🔒 100% Privacy & Security**: Zero photos or metadata leave the device or browser memory.
 - **📑 Standardized Naming & Sharing**:
-  - Automatic PDF filename: `sol id <SOL_ID>.pdf` (e.g. `sol id 1100.pdf`).
+  - Automatic PDF filename format: `<SOL ID> <BRANCH_NAME>.pdf` (e.g., `1100 Mumbai_Fort.pdf`).
+  - Automatic space-to-underscore conversion & OS filename sanitization.
   - Single-click PDF download & native mobile Web Share integration.
 
 ---
@@ -33,9 +36,10 @@ A mobile-first, 100% client-side web application designed for **Field Engineers 
 ```
 PDF Generator/
 │
-├── index.html   # HTML5 structure with 4 required photo cards
+├── index.html   # HTML5 structure with SOL ID, Branch Name & 4 photo cards
 ├── style.css    # Clean CSS design system & single-photo card preview
 ├── script.js    # High-quality photo loader & 4-page jsPDF generator
+├── LICENSE      # MIT License
 └── README.md    # Project documentation
 ```
 
