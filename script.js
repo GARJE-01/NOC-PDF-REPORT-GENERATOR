@@ -11,9 +11,10 @@ const CATEGORIES = [
     { id: 'new_switch_sn', title: 'NEW SWITCH SERIAL NUMBER PHOTO', name: 'New Switch Serial Number Photo', page: 4 }
 ];
 
-// App State (Single photo per category)
+// App State
 let reportState = {
     solId: '',
+    branchName: '',
     photos: {
         signoff: null,
         pre_install: null,
@@ -39,13 +40,22 @@ function initApp() {
         clearCategoryHighlight('card-sol');
     });
 
+    const branchInput = document.getElementById('branch-name');
+    if (branchInput) {
+        branchInput.addEventListener('input', (e) => {
+            reportState.branchName = e.target.value.trim();
+            updateValidationState();
+            clearCategoryHighlight('card-branch');
+        });
+    }
+
     // Render initial photo containers
     CATEGORIES.forEach(cat => renderPhotoCard(cat.id));
     updateValidationState();
 }
 
 /**
- * Format device date to DD-MMM-YYYY (e.g. 18-Aug-2026)
+ * Format device date to DD-MMM-YYYY (e.g. 19-Aug-2026)
  */
 function getFormattedDate() {
     const d = new Date();
@@ -54,6 +64,17 @@ function getFormattedDate() {
     const month = months[d.getMonth()];
     const year = d.getFullYear();
     return `${day}-${month}-${year}`;
+}
+
+/**
+ * Generate PDF Filename in format: <SOL ID> <BRANCH_NAME>.pdf
+ * Spaces in Branch Name are replaced with underscores (_).
+ * Invalid OS filename characters are sanitized.
+ */
+function generatePdfFilename(solId, branchName) {
+    let sanitizedBranch = branchName.replace(/\s+/g, '_');
+    sanitizedBranch = sanitizedBranch.replace(/[/\\?%*:|"<>]/g, '');
+    return `${solId} ${sanitizedBranch}.pdf`;
 }
 
 /**
@@ -157,6 +178,16 @@ function updateValidationState() {
         solIcon.classList.remove('visible');
     }
 
+    const branchValid = reportState.branchName.length > 0;
+    const branchIcon = document.getElementById('branch-valid-icon');
+    if (branchIcon) {
+        if (branchValid) {
+            branchIcon.classList.add('visible');
+        } else {
+            branchIcon.classList.remove('visible');
+        }
+    }
+
     let completedCount = 0;
 
     CATEGORIES.forEach(cat => {
@@ -179,7 +210,7 @@ function updateValidationState() {
     progressSummary.innerHTML = `Required photos completed: <strong>${completedCount}/${CATEGORIES.length}</strong>`;
 
     const btnGenerate = document.getElementById('btn-generate');
-    const allValid = solValid && (completedCount === CATEGORIES.length);
+    const allValid = solValid && branchValid && (completedCount === CATEGORIES.length);
     btnGenerate.disabled = !allValid;
 }
 
@@ -191,8 +222,13 @@ function validateReport() {
     const missingCards = [];
 
     if (!reportState.solId) {
-        missing.push('Please enter a valid SOL ID.');
+        missing.push('Please enter SOL ID.');
         missingCards.push('card-sol');
+    }
+
+    if (!reportState.branchName) {
+        missing.push('Please enter Branch Name.');
+        missingCards.push('card-branch');
     }
 
     CATEGORIES.forEach(cat => {
@@ -271,8 +307,9 @@ async function createPdf() {
     const pageWidth = doc.internal.pageSize.getWidth(); // 210 mm
     const pageHeight = doc.internal.pageSize.getHeight(); // 297 mm
     const solId = reportState.solId;
+    const branchName = reportState.branchName;
     const dateStr = getFormattedDate();
-    generatedFilename = `sol id ${solId}.pdf`;
+    generatedFilename = generatePdfFilename(solId, branchName);
 
     // 4 Pages in exact order:
     // Page 1: Sign-off Report
@@ -299,7 +336,8 @@ async function createPdf() {
         
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(9);
-        doc.text(`SOL ID: ${solId} | Date: ${dateStr}`, pageWidth - 10, 8.5, { align: 'right' });
+        const headerText = `SOL ID: ${solId} | Branch: ${branchName} | Date: ${dateStr}`;
+        doc.text(headerText, pageWidth - 10, 8.5, { align: 'right' });
 
         // Printable bounds for full-page photo
         const marginTop = 15;
@@ -388,7 +426,7 @@ async function sharePdf() {
         try {
             await navigator.share({
                 title: generatedFilename,
-                text: `Site Installation Report - SOL ID ${reportState.solId}`,
+                text: `Site Installation Report - SOL ID ${reportState.solId} (${reportState.branchName})`,
                 files: [file]
             });
         } catch (err) {
@@ -407,14 +445,18 @@ async function sharePdf() {
  * Reset Form for new report
  */
 function confirmResetReport() {
-    if (confirm('Create a new report?\nThis will clear current photos and SOL ID.')) {
+    if (confirm('Create a new report?\nThis will clear current photos, SOL ID, and Branch Name.')) {
         reportState.solId = '';
+        reportState.branchName = '';
         CATEGORIES.forEach(cat => {
             reportState.photos[cat.id] = null;
             renderPhotoCard(cat.id);
         });
 
         document.getElementById('sol-id').value = '';
+        const branchInput = document.getElementById('branch-name');
+        if (branchInput) branchInput.value = '';
+        
         generatedPdfBlob = null;
         generatedFilename = '';
 

@@ -106,8 +106,8 @@ body {
     transition: border-color 0.2s ease, box-shadow 0.2s ease, transform 0.1s ease;
 }
 
-/* SOL Card */
-.sol-card {
+/* SOL & Branch Cards */
+.sol-card, .branch-card {
     background: var(--bg-card);
     border-left: 5px solid var(--primary);
 }
