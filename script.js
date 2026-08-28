@@ -16,7 +16,7 @@ let reportState = {
     solId: '',
     branchName: '',
     photos: {
-        signoff: null,
+        signoff: null,      // Stores { file, dataUrl, width, height }
         pre_install: null,
         post_install: null,
         new_switch_sn: null
@@ -34,11 +34,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
 function initApp() {
     const solInput = document.getElementById('sol-id');
-    solInput.addEventListener('input', (e) => {
-        reportState.solId = e.target.value.trim();
-        updateValidationState();
-        clearCategoryHighlight('card-sol');
-    });
+    if (solInput) {
+        solInput.addEventListener('input', (e) => {
+            reportState.solId = e.target.value.trim();
+            updateValidationState();
+            clearCategoryHighlight('card-sol');
+        });
+    }
 
     const branchInput = document.getElementById('branch-name');
     if (branchInput) {
@@ -55,7 +57,7 @@ function initApp() {
 }
 
 /**
- * Format device date to DD-MMM-YYYY (e.g. 19-Aug-2026)
+ * Format device date to DD-MMM-YYYY (e.g. 28-Aug-2026)
  */
 function getFormattedDate() {
     const d = new Date();
@@ -67,14 +69,22 @@ function getFormattedDate() {
 }
 
 /**
- * Generate PDF Filename in format: <SOL ID> <BRANCH_NAME>.pdf
- * Spaces in Branch Name are replaced with underscores (_).
- * Invalid OS filename characters are sanitized.
+ * Format PDF Filename: <SOL ID> <BRANCH_NAME>.pdf
+ * 1. Trim SOL ID and Branch Name
+ * 2. Replace one or more spaces in Branch Name with a single underscore '_'
+ * 3. Sanitize invalid OS filename characters (/ \ : * ? " < > |)
  */
 function generatePdfFilename(solId, branchName) {
-    let sanitizedBranch = branchName.replace(/\s+/g, '_');
-    sanitizedBranch = sanitizedBranch.replace(/[/\\?%*:|"<>]/g, '');
-    return `${solId} ${sanitizedBranch}.pdf`;
+    const cleanSolId = (solId || '').trim();
+    let cleanBranch = (branchName || '').trim();
+
+    // Replace one or more spaces with a single underscore
+    cleanBranch = cleanBranch.replace(/\s+/g, '_');
+
+    // Remove invalid filename characters
+    cleanBranch = cleanBranch.replace(/[/\\?%*:|"<>]/g, '');
+
+    return `${cleanSolId} ${cleanBranch}.pdf`;
 }
 
 /**
@@ -88,14 +98,109 @@ function triggerUploadPhoto(categoryId) {
 }
 
 /**
- * Read original photo file with maximum quality (No lossy compression or resizing)
+ * Normalizes an uploaded File object or DataURL:
+ * 1. Fully decodes image respecting EXIF orientation.
+ * 2. Draws image onto 2D Canvas with solid white background.
+ * 3. Exports sRGB 24-bit JPEG DataURL (quality 0.92).
+ * 4. Returns verified { dataUrl, width, height }.
  */
-function readPhotoAsDataUrl(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = (e) => resolve(e.target.result);
-        reader.onerror = (err) => reject(err);
-        reader.readAsDataURL(file);
+async function processAndNormalizeImage(fileOrDataUrl) {
+    return new Promise(async (resolve, reject) => {
+        try {
+            let bitmap = null;
+
+            // Attempt createImageBitmap with EXIF orientation handling
+            if (fileOrDataUrl instanceof File || fileOrDataUrl instanceof Blob) {
+                if ('createImageBitmap' in window) {
+                    try {
+                        bitmap = await createImageBitmap(fileOrDataUrl, { imageOrientation: 'from-image' });
+                    } catch (e) {
+                        // Fall back to Image element if createImageBitmap fails
+                    }
+                }
+            }
+
+            if (bitmap) {
+                const width = bitmap.width;
+                const height = bitmap.height;
+                if (!width || !height) {
+                    reject(new Error("Invalid image dimensions"));
+                    return;
+                }
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+
+                // Solid white background to avoid dark/black transparency artifacts
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(0, 0, width, height);
+                ctx.drawImage(bitmap, 0, 0);
+
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+                bitmap.close();
+
+                if (!dataUrl || dataUrl === 'data:,' || dataUrl.length < 100) {
+                    reject(new Error("Empty image data generated"));
+                    return;
+                }
+
+                resolve({ dataUrl, width, height });
+                return;
+            }
+
+            // Fallback using HTMLImageElement
+            const img = new Image();
+            img.crossOrigin = 'anonymous';
+
+            let srcUrl = fileOrDataUrl;
+            let objectUrlToRevoke = null;
+
+            if (fileOrDataUrl instanceof File || fileOrDataUrl instanceof Blob) {
+                srcUrl = URL.createObjectURL(fileOrDataUrl);
+                objectUrlToRevoke = srcUrl;
+            }
+
+            img.onload = () => {
+                if (objectUrlToRevoke) URL.revokeObjectURL(objectUrlToRevoke);
+
+                const width = img.naturalWidth || img.width;
+                const height = img.naturalHeight || img.height;
+
+                if (!width || !height) {
+                    reject(new Error("Invalid image dimensions"));
+                    return;
+                }
+
+                const canvas = document.createElement('canvas');
+                canvas.width = width;
+                canvas.height = height;
+                const ctx = canvas.getContext('2d');
+
+                ctx.fillStyle = '#FFFFFF';
+                ctx.fillRect(0, 0, width, height);
+                ctx.drawImage(img, 0, 0);
+
+                const dataUrl = canvas.toDataURL('image/jpeg', 0.92);
+
+                if (!dataUrl || dataUrl === 'data:,' || dataUrl.length < 100) {
+                    reject(new Error("Empty image data generated"));
+                    return;
+                }
+
+                resolve({ dataUrl, width, height });
+            };
+
+            img.onerror = (err) => {
+                if (objectUrlToRevoke) URL.revokeObjectURL(objectUrlToRevoke);
+                reject(err || new Error("Failed to load image"));
+            };
+
+            img.src = srcUrl;
+        } catch (err) {
+            reject(err);
+        }
     });
 }
 
@@ -106,16 +211,23 @@ async function handleFileSelected(event) {
     const file = event.target.files[0];
     if (!file || !currentActiveCategory) return;
 
-    showLoading(true, 'Loading photo...');
+    showLoading(true, 'Processing & normalizing photo...');
     try {
-        const rawDataUrl = await readPhotoAsDataUrl(file);
-        reportState.photos[currentActiveCategory] = rawDataUrl;
+        const processed = await processAndNormalizeImage(file);
+        reportState.photos[currentActiveCategory] = {
+            file: file,
+            dataUrl: processed.dataUrl,
+            width: processed.width,
+            height: processed.height
+        };
         renderPhotoCard(currentActiveCategory);
         updateValidationState();
         clearCategoryHighlight(`card-${currentActiveCategory}`);
     } catch (err) {
-        console.error('Error reading photo:', err);
-        alert('Could not read photo file. Please try again.');
+        console.error('Error processing photo:', err);
+        const catConfig = CATEGORIES.find(c => c.id === currentActiveCategory);
+        const catName = catConfig ? catConfig.name : 'Photo';
+        alert(`Unable to process the ${catName}. Please select a valid photo file.`);
     } finally {
         showLoading(false);
     }
@@ -138,12 +250,12 @@ function removePhoto(categoryId) {
 function renderPhotoCard(categoryId) {
     const container = document.getElementById(`grid-${categoryId}`);
     const actionsContainer = document.getElementById(`actions-${categoryId}`);
-    const photoDataUrl = reportState.photos[categoryId];
+    const photoObj = reportState.photos[categoryId];
 
-    if (photoDataUrl) {
+    if (photoObj && photoObj.dataUrl) {
         container.innerHTML = `
             <div class="single-photo-card">
-                <img src="${photoDataUrl}" alt="Photo Preview" class="single-photo-preview" />
+                <img src="${photoObj.dataUrl}" alt="Photo Preview" class="single-photo-preview" />
             </div>
         `;
         actionsContainer.innerHTML = `
@@ -172,10 +284,12 @@ function renderPhotoCard(categoryId) {
 function updateValidationState() {
     const solValid = reportState.solId.length > 0;
     const solIcon = document.getElementById('sol-valid-icon');
-    if (solValid) {
-        solIcon.classList.add('visible');
-    } else {
-        solIcon.classList.remove('visible');
+    if (solIcon) {
+        if (solValid) {
+            solIcon.classList.add('visible');
+        } else {
+            solIcon.classList.remove('visible');
+        }
     }
 
     const branchValid = reportState.branchName.length > 0;
@@ -191,27 +305,35 @@ function updateValidationState() {
     let completedCount = 0;
 
     CATEGORIES.forEach(cat => {
-        const hasPhoto = reportState.photos[cat.id] !== null;
+        const hasPhoto = reportState.photos[cat.id] !== null && reportState.photos[cat.id] !== undefined;
         const badge = document.getElementById(`badge-${cat.id}`);
-        if (hasPhoto) {
-            completedCount++;
-            badge.className = 'status-indicator badge-completed';
-            badge.innerHTML = '✅ Complete';
-        } else {
-            badge.className = 'status-indicator badge-required';
-            badge.innerHTML = '🔴 Required';
+        if (badge) {
+            if (hasPhoto) {
+                completedCount++;
+                badge.className = 'status-indicator badge-completed';
+                badge.innerHTML = '✅ Complete';
+            } else {
+                badge.className = 'status-indicator badge-required';
+                badge.innerHTML = '🔴 Required';
+            }
         }
     });
 
     const counterText = document.getElementById('checklist-counter');
-    counterText.innerText = `Required: ${completedCount}/${CATEGORIES.length}`;
+    if (counterText) {
+        counterText.innerText = `Required: ${completedCount}/${CATEGORIES.length}`;
+    }
 
     const progressSummary = document.getElementById('required-progress-text');
-    progressSummary.innerHTML = `Required photos completed: <strong>${completedCount}/${CATEGORIES.length}</strong>`;
+    if (progressSummary) {
+        progressSummary.innerHTML = `Required photos completed: <strong>${completedCount}/${CATEGORIES.length}</strong>`;
+    }
 
     const btnGenerate = document.getElementById('btn-generate');
-    const allValid = solValid && branchValid && (completedCount === CATEGORIES.length);
-    btnGenerate.disabled = !allValid;
+    if (btnGenerate) {
+        const allValid = solValid && branchValid && (completedCount === CATEGORIES.length);
+        btnGenerate.disabled = !allValid;
+    }
 }
 
 /**
@@ -277,19 +399,19 @@ function clearCategoryHighlight(cardId) {
 }
 
 /**
- * Generate PDF using jsPDF (Exactly 4 Pages, High Quality)
+ * Sequential PDF Generation with Pre-Flight Image Verification
  */
 async function handleGeneratePdf() {
     if (!validateReport()) return;
 
-    showLoading(true, 'Building high-quality PDF report...');
-    
+    showLoading(true, 'Verifying photos & building PDF...');
+
     setTimeout(async () => {
         try {
             await createPdf();
         } catch (err) {
-            console.error('PDF Generation Failed:', err);
-            alert('An error occurred while generating the PDF. Please try again.');
+            console.error('PDF Generation Error:', err);
+            alert(err.message || 'An error occurred while generating the PDF. Please try again.');
         } finally {
             showLoading(false);
         }
@@ -298,24 +420,44 @@ async function handleGeneratePdf() {
 
 async function createPdf() {
     const { jsPDF } = window.jspdf;
+
+    const solId = reportState.solId.trim();
+    const branchName = reportState.branchName.trim();
+    const dateStr = getFormattedDate();
+
+    // 1. Strict Pre-flight Verification of all 4 images before starting PDF construction
+    const normalizedMap = {};
+
+    for (const cat of CATEGORIES) {
+        const photoObj = reportState.photos[cat.id];
+        if (!photoObj || (!photoObj.file && !photoObj.dataUrl)) {
+            throw new Error(`Please upload the ${cat.name}.`);
+        }
+
+        try {
+            const norm = await processAndNormalizeImage(photoObj.file || photoObj.dataUrl);
+            if (!norm.dataUrl || !norm.width || !norm.height) {
+                throw new Error("Invalid image dimensions or empty data");
+            }
+            normalizedMap[cat.id] = norm;
+        } catch (e) {
+            console.error(`Failed pre-flight image verification for ${cat.name}:`, e);
+            throw new Error(`Unable to process the ${cat.name}. Please remove and upload the photo again.`);
+        }
+    }
+
+    // 2. Create PDF document
     const doc = new jsPDF({
         orientation: 'portrait',
         unit: 'mm',
         format: 'a4'
     });
 
-    const pageWidth = doc.internal.pageSize.getWidth(); // 210 mm
-    const pageHeight = doc.internal.pageSize.getHeight(); // 297 mm
-    const solId = reportState.solId;
-    const branchName = reportState.branchName;
-    const dateStr = getFormattedDate();
+    const pageWidth = doc.internal.pageSize.getWidth();   // 210 mm
+    const pageHeight = doc.internal.pageSize.getHeight();  // 297 mm
     generatedFilename = generatePdfFilename(solId, branchName);
 
-    // 4 Pages in exact order:
-    // Page 1: Sign-off Report
-    // Page 2: Pre-Installation Photo
-    // Page 3: Post-Installation Photo
-    // Page 4: New Switch Serial Number Photo
+    // 3. Render 4 Pages strictly sequentially
     for (let i = 0; i < CATEGORIES.length; i++) {
         const cat = CATEGORIES[i];
         if (i > 0) {
@@ -323,17 +465,17 @@ async function createPdf() {
         }
 
         const pageNum = i + 1;
-        const photoDataUrl = reportState.photos[cat.id];
+        const norm = normalizedMap[cat.id];
 
-        // Minimal Header Bar
+        // Header Bar (12mm)
         doc.setFillColor(30, 41, 59); // Deep Slate
         doc.rect(0, 0, pageWidth, 12, 'F');
-        
+
         doc.setFont('helvetica', 'bold');
         doc.setFontSize(10);
         doc.setTextColor(255, 255, 255);
         doc.text(`${pageNum}. ${cat.title}`, 10, 8.5);
-        
+
         doc.setFont('helvetica', 'normal');
         doc.setFontSize(9);
         const headerText = `SOL ID: ${solId} | Branch: ${branchName} | Date: ${dateStr}`;
@@ -344,29 +486,23 @@ async function createPdf() {
         const marginBottom = 12;
         const marginSide = 8;
 
-        const maxImgWidth = pageWidth - (marginSide * 2); // 194 mm
-        const maxImgHeight = pageHeight - marginTop - marginBottom; // 270 mm
+        const maxImgWidth = pageWidth - (marginSide * 2);  // 194 mm
+        const maxImgHeight = pageHeight - marginTop - marginBottom;  // 270 mm
 
-        if (photoDataUrl) {
-            const dimensions = await getImageDimensions(photoDataUrl);
-            
-            // Maintain exact original aspect ratio
-            let renderW = maxImgWidth;
-            let renderH = (dimensions.height * renderW) / dimensions.width;
+        // Proportional Fit-Inside Scaling Math (Equal scale factor for W and H preserves 100% exact aspect ratio)
+        const imgW = norm.width;
+        const imgH = norm.height;
 
-            if (renderH > maxImgHeight) {
-                renderH = maxImgHeight;
-                renderW = (dimensions.width * renderH) / dimensions.height;
-            }
+        const scale = Math.min(maxImgWidth / imgW, maxImgHeight / imgH);
+        const renderW = imgW * scale;
+        const renderH = imgH * scale;
 
-            // Center image on page
-            const posX = marginSide + (maxImgWidth - renderW) / 2;
-            const posY = marginTop + (maxImgHeight - renderH) / 2;
+        // Center image horizontally and vertically
+        const posX = marginSide + (maxImgWidth - renderW) / 2;
+        const posY = marginTop + (maxImgHeight - renderH) / 2;
 
-            // Detect image format from data URL (PNG vs JPEG)
-            const imageFormat = photoDataUrl.startsWith('data:image/png') ? 'PNG' : 'JPEG';
-            doc.addImage(photoDataUrl, imageFormat, posX, posY, renderW, renderH);
-        }
+        // Add normalized sRGB JPEG image to PDF
+        doc.addImage(norm.dataUrl, 'JPEG', posX, posY, renderW, renderH);
 
         // Footer Page Numbering (Page X of 4)
         doc.setFont('helvetica', 'normal');
@@ -377,19 +513,6 @@ async function createPdf() {
 
     generatedPdfBlob = doc.output('blob');
     showSuccessScreen();
-}
-
-/**
- * Get natural dimensions of DataURL image
- */
-function getImageDimensions(src) {
-    return new Promise((resolve) => {
-        const img = new Image();
-        img.src = src;
-        img.onload = () => {
-            resolve({ width: img.width, height: img.height });
-        };
-    });
 }
 
 /**
@@ -453,17 +576,19 @@ function confirmResetReport() {
             renderPhotoCard(cat.id);
         });
 
-        document.getElementById('sol-id').value = '';
+        const solInput = document.getElementById('sol-id');
+        if (solInput) solInput.value = '';
+
         const branchInput = document.getElementById('branch-name');
         if (branchInput) branchInput.value = '';
-        
+
         generatedPdfBlob = null;
         generatedFilename = '';
 
         document.getElementById('validation-banner').classList.add('hidden');
         document.getElementById('success-view').classList.add('hidden');
         document.getElementById('main-view').classList.remove('hidden');
-        
+
         updateValidationState();
         window.scrollTo({ top: 0, behavior: 'smooth' });
     }
@@ -475,10 +600,12 @@ function confirmResetReport() {
 function showLoading(show, message = 'Processing...') {
     const overlay = document.getElementById('loading-overlay');
     const text = document.getElementById('loading-text');
-    if (show) {
-        text.innerText = message;
-        overlay.classList.remove('hidden');
-    } else {
-        overlay.classList.add('hidden');
+    if (overlay && text) {
+        if (show) {
+            text.innerText = message;
+            overlay.classList.remove('hidden');
+        } else {
+            overlay.classList.add('hidden');
+        }
     }
 }
