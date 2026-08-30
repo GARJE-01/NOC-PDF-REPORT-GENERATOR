@@ -26,6 +26,8 @@ let reportState = {
 let currentActiveCategory = null;
 let generatedPdfBlob = null;
 let generatedFilename = '';
+let generatedZipBlob = null;
+let generatedZipFilename = '';
 
 // Initialize App
 document.addEventListener('DOMContentLoaded', () => {
@@ -409,9 +411,15 @@ async function handleGeneratePdf() {
     setTimeout(async () => {
         try {
             await createPdf();
+
+            // After PDF is ready, create the ZIP from original uploaded files
+            showLoading(true, 'Creating original photos ZIP...');
+            await createZip();
+
+            showSuccessScreen();
         } catch (err) {
-            console.error('PDF Generation Error:', err);
-            alert(err.message || 'An error occurred while generating the PDF. Please try again.');
+            console.error('Generation Error:', err);
+            alert(err.message || 'An error occurred while generating the report. Please try again.');
         } finally {
             showLoading(false);
         }
@@ -512,16 +520,66 @@ async function createPdf() {
     }
 
     generatedPdfBlob = doc.output('blob');
-    showSuccessScreen();
+    // (Success screen is shown after ZIP is also created)
 }
 
 /**
- * Show Success View
+ * Create ZIP file containing the ORIGINAL uploaded files (no processing/resizing).
+ * Files inside ZIP are renamed by category. Original file extension is preserved.
+ */
+async function createZip() {
+    if (typeof JSZip === 'undefined') {
+        throw new Error('ZIP library not loaded. Please refresh the page and try again.');
+    }
+
+    const zip = new JSZip();
+
+    // Labels used as filenames inside the ZIP
+    const zipFileNames = {
+        signoff:       'Sign-off Report',
+        pre_install:   'Pre-Installation',
+        post_install:  'Post-Installation',
+        new_switch_sn: 'New Switch Serial Number'
+    };
+
+    for (const cat of CATEGORIES) {
+        const photoObj = reportState.photos[cat.id];
+        if (!photoObj || !photoObj.file) {
+            throw new Error(`Original file missing for ${cat.name}. Please remove and upload the photo again.`);
+        }
+
+        const originalFile = photoObj.file;
+
+        // Preserve original file extension (e.g. .jpg, .jpeg, .png, .heic)
+        const originalName = originalFile.name || 'photo';
+        const lastDot = originalName.lastIndexOf('.');
+        const ext = lastDot !== -1 ? originalName.substring(lastDot).toLowerCase() : '.jpg';
+
+        const zipEntryName = `${zipFileNames[cat.id]}${ext}`;
+
+        // Use STORE (no compression) to preserve original file bytes exactly
+        zip.file(zipEntryName, originalFile, { compression: 'STORE' });
+    }
+
+    const solId = reportState.solId.trim();
+    const branchName = reportState.branchName.trim();
+    const cleanBranch = branchName.replace(/\s+/g, '_').replace(/[/\\?%*:|"<>]/g, '');
+    generatedZipFilename = `${solId} ${cleanBranch}.zip`;
+
+    generatedZipBlob = await zip.generateAsync({ type: 'blob' });
+}
+
+/**
+ * Show Success View with both PDF and ZIP filenames
  */
 function showSuccessScreen() {
     document.getElementById('main-view').classList.add('hidden');
     document.getElementById('success-view').classList.remove('hidden');
     document.getElementById('generated-filename').innerText = generatedFilename;
+
+    const zipNameEl = document.getElementById('generated-zip-filename');
+    if (zipNameEl) zipNameEl.innerText = generatedZipFilename;
+
     window.scrollTo({ top: 0, behavior: 'smooth' });
 }
 
@@ -533,6 +591,22 @@ function downloadPdf() {
     const link = document.createElement('a');
     link.href = URL.createObjectURL(generatedPdfBlob);
     link.download = generatedFilename;
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+}
+
+/**
+ * Download Original Photos ZIP
+ */
+function downloadZip() {
+    if (!generatedZipBlob) {
+        alert('ZIP file is not available. Please generate the report again.');
+        return;
+    }
+    const link = document.createElement('a');
+    link.href = URL.createObjectURL(generatedZipBlob);
+    link.download = generatedZipFilename;
     document.body.appendChild(link);
     link.click();
     document.body.removeChild(link);
@@ -584,6 +658,8 @@ function confirmResetReport() {
 
         generatedPdfBlob = null;
         generatedFilename = '';
+        generatedZipBlob = null;
+        generatedZipFilename = '';
 
         document.getElementById('validation-banner').classList.add('hidden');
         document.getElementById('success-view').classList.add('hidden');

@@ -10,6 +10,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&display=swap" rel="stylesheet">
     <!-- jsPDF Library -->
     <script src="https://cdnjs.cloudflare.com/ajax/libs/jspdf/2.5.1/jspdf.umd.min.js"></script>
+    <!-- JSZip Library -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/jszip/3.10.1/jszip.min.js"></script>
     <link rel="stylesheet" href="style.css">
 </head>
 <body>
@@ -172,28 +174,39 @@
             <div class="success-card">
                 <div class="success-icon">✅</div>
                 <h2>Report Generated Successfully</h2>
-                <p class="success-subtitle">PDF is ready for review and sharing</p>
+                <p class="success-subtitle">Both files are ready. Download as needed.</p>
 
-                <div class="pdf-file-badge">
-                    <span class="file-icon">📄</span>
-                    <span id="generated-filename" class="filename-text">sol id 1100.pdf</span>
-                </div>
-
-                <div class="success-actions">
+                <!-- PDF Section -->
+                <div class="download-section">
+                    <div class="download-section-label">📄 PDF Report</div>
+                    <div class="pdf-file-badge">
+                        <span class="file-icon">📄</span>
+                        <span id="generated-filename" class="filename-text">1100 Mumbai_Fort.pdf</span>
+                    </div>
                     <button class="btn btn-primary btn-large" onclick="downloadPdf()">
                         📥 Download PDF
                     </button>
+                </div>
 
-                    <button id="btn-share" class="btn btn-secondary btn-large" onclick="sharePdf()">
-                        📤 Share PDF
-                    </button>
+                <hr class="divider" />
 
-                    <hr class="divider" />
-
-                    <button class="btn btn-outline" onclick="confirmResetReport()">
-                        🔄 Create New Report
+                <!-- ZIP Section -->
+                <div class="download-section">
+                    <div class="download-section-label">🗜️ Original Photos</div>
+                    <div class="pdf-file-badge zip-badge">
+                        <span class="file-icon">🗜️</span>
+                        <span id="generated-zip-filename" class="filename-text">1100 Mumbai_Fort.zip</span>
+                    </div>
+                    <button class="btn btn-zip btn-large" onclick="downloadZip()">
+                        📦 Download Original Photos ZIP
                     </button>
                 </div>
+
+                <hr class="divider" />
+
+                <button class="btn btn-outline" onclick="confirmResetReport()">
+                    🔄 Create New Report
+                </button>
             </div>
         </div>
 

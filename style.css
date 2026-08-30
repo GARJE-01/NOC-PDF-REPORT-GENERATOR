@@ -560,6 +560,37 @@ body {
     color: var(--text-primary);
 }
 
+.btn-zip {
+    background: #0f766e;
+    color: #ffffff;
+}
+
+.btn-zip:hover {
+    background: #0d9488;
+}
+
+/* Download Sections on Success Screen */
+.download-section {
+    display: flex;
+    flex-direction: column;
+    gap: 10px;
+    width: 100%;
+}
+
+.download-section-label {
+    font-size: 13px;
+    font-weight: 700;
+    color: var(--text-secondary);
+    text-transform: uppercase;
+    letter-spacing: 0.05em;
+    text-align: left;
+}
+
+.zip-badge {
+    background: #f0fdfa !important;
+    border-color: #99f6e4 !important;
+}
+
 .divider {
     border: none;
     border-top: 1px solid var(--border-color);
