@@ -207,15 +207,131 @@ async function processAndNormalizeImage(fileOrDataUrl) {
 }
 
 /**
+ * Fallback image processor for affected devices/browsers:
+ * 1. Uses the original uploaded File object via FileReader as a DataURL.
+ * 2. If reading file fails, falls back to existing DataURL if available.
+ * 3. Loads it into a normal HTML Image object and waits for completion.
+ * 4. Verifies that the image has valid width and height.
+ * 5. Preserves full color and aspect ratio.
+ * 6. Returns verified { dataUrl, width, height }.
+ */
+async function fallbackProcessImage(file, existingDataUrl) {
+    let dataUrl = null;
+
+    // 1. Try reading the original File object using FileReader
+    if (file instanceof File || file instanceof Blob) {
+        try {
+            dataUrl = await new Promise((resolve, reject) => {
+                const reader = new FileReader();
+                reader.onload = () => {
+                    if (reader.result && typeof reader.result === 'string' && reader.result.length > 100) {
+                        resolve(reader.result);
+                    } else {
+                        reject(new Error("FileReader returned empty result"));
+                    }
+                };
+                reader.onerror = () => reject(new Error("FileReader failed to read file"));
+                reader.readAsDataURL(file);
+            });
+        } catch (frErr) {
+            console.warn("Fallback FileReader failed, trying existingDataUrl:", frErr);
+        }
+    }
+
+    // 2. If FileReader did not yield a dataUrl, use existingDataUrl (from preview)
+    if (!dataUrl && existingDataUrl && typeof existingDataUrl === 'string' && existingDataUrl.length > 100) {
+        dataUrl = existingDataUrl;
+    }
+
+    if (!dataUrl) {
+        throw new Error("No readable image data available");
+    }
+
+    // 3. Load into a normal HTML Image object and wait for completion
+    const loaded = await new Promise((resolve, reject) => {
+        const img = new Image();
+        img.onload = () => {
+            const width = img.naturalWidth || img.width;
+            const height = img.naturalHeight || img.height;
+            if (!width || !height) {
+                reject(new Error("Loaded image has invalid dimensions"));
+                return;
+            }
+            resolve({ img, width, height });
+        };
+        img.onerror = () => reject(new Error("HTML Image failed to decode"));
+        img.src = dataUrl;
+    });
+
+    const { img, width, height } = loaded;
+
+    // 4. If image is already standard JPEG or PNG, return directly (no canvas needed)
+    const isJpeg = dataUrl.startsWith('data:image/jpeg') || dataUrl.startsWith('data:image/jpg');
+    const isPng = dataUrl.startsWith('data:image/png');
+
+    if (isJpeg || isPng) {
+        return { dataUrl, width, height };
+    }
+
+    // 5. For non-JPEG/PNG formats (e.g. WebP, GIF, BMP), safely normalize onto canvas
+    try {
+        const maxDimension = 3000;
+        let cWidth = width;
+        let cHeight = height;
+
+        if (cWidth > maxDimension || cHeight > maxDimension) {
+            if (cWidth > cHeight) {
+                cHeight = Math.round((cHeight * maxDimension) / cWidth);
+                cWidth = maxDimension;
+            } else {
+                cWidth = Math.round((cWidth * maxDimension) / cHeight);
+                cHeight = maxDimension;
+            }
+        }
+
+        const canvas = document.createElement('canvas');
+        canvas.width = cWidth;
+        canvas.height = cHeight;
+        const ctx = canvas.getContext('2d');
+        ctx.fillStyle = '#FFFFFF';
+        ctx.fillRect(0, 0, cWidth, cHeight);
+        ctx.drawImage(img, 0, 0, cWidth, cHeight);
+
+        const convertedDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+        if (convertedDataUrl && convertedDataUrl.length > 100 && convertedDataUrl !== 'data:,') {
+            return { dataUrl: convertedDataUrl, width, height };
+        }
+    } catch (canvasErr) {
+        console.warn("Canvas conversion failed in fallback, using original dataUrl:", canvasErr);
+    }
+
+    return { dataUrl, width, height };
+}
+
+/**
  * Handle photo selection
  */
 async function handleFileSelected(event) {
     const file = event.target.files[0];
     if (!file || !currentActiveCategory) return;
 
-    showLoading(true, 'Processing & normalizing photo...');
+    showLoading(true, 'Processing photo...');
+    let processed = null;
+
+    // Try primary method first
     try {
-        const processed = await processAndNormalizeImage(file);
+        processed = await processAndNormalizeImage(file);
+    } catch (primaryErr) {
+        console.warn('Primary processing failed on select, trying fallback:', primaryErr);
+        // Try fallback method if primary fails
+        try {
+            processed = await fallbackProcessImage(file);
+        } catch (fallbackErr) {
+            console.error('All processing methods failed on select:', fallbackErr);
+        }
+    }
+
+    if (processed && processed.dataUrl && processed.width && processed.height) {
         reportState.photos[currentActiveCategory] = {
             file: file,
             dataUrl: processed.dataUrl,
@@ -225,14 +341,13 @@ async function handleFileSelected(event) {
         renderPhotoCard(currentActiveCategory);
         updateValidationState();
         clearCategoryHighlight(`card-${currentActiveCategory}`);
-    } catch (err) {
-        console.error('Error processing photo:', err);
+    } else {
         const catConfig = CATEGORIES.find(c => c.id === currentActiveCategory);
         const catName = catConfig ? catConfig.name : 'Photo';
         alert(`Unable to process the ${catName}. Please select a valid photo file.`);
-    } finally {
-        showLoading(false);
     }
+
+    showLoading(false);
 }
 
 /**
@@ -442,16 +557,31 @@ async function createPdf() {
             throw new Error(`Please upload the ${cat.name}.`);
         }
 
+        let norm = null;
+
+        // Try primary method first (existing working method for most FEs)
         try {
-            const norm = await processAndNormalizeImage(photoObj.file || photoObj.dataUrl);
-            if (!norm.dataUrl || !norm.width || !norm.height) {
+            norm = await processAndNormalizeImage(photoObj.file || photoObj.dataUrl);
+            if (!norm || !norm.dataUrl || !norm.width || !norm.height) {
                 throw new Error("Invalid image dimensions or empty data");
             }
-            normalizedMap[cat.id] = norm;
-        } catch (e) {
-            console.error(`Failed pre-flight image verification for ${cat.name}:`, e);
-            throw new Error(`Unable to process the ${cat.name}. Please remove and upload the photo again.`);
+        } catch (primaryErr) {
+            console.warn(`Primary image verification failed for ${cat.name}, attempting fallback:`, primaryErr);
+            showLoading(true, 'Processing photo...');
+
+            // Try fallback method for affected devices
+            try {
+                norm = await fallbackProcessImage(photoObj.file, photoObj.dataUrl);
+                if (!norm || !norm.dataUrl || !norm.width || !norm.height) {
+                    throw new Error("Fallback failed to produce valid image");
+                }
+            } catch (fallbackErr) {
+                console.error(`All verification methods failed for ${cat.name}:`, fallbackErr);
+                throw new Error(`Unable to process the ${cat.name}. Please remove and upload the photo again.`);
+            }
         }
+
+        normalizedMap[cat.id] = norm;
     }
 
     // 2. Create PDF document
@@ -509,8 +639,9 @@ async function createPdf() {
         const posX = marginSide + (maxImgWidth - renderW) / 2;
         const posY = marginTop + (maxImgHeight - renderH) / 2;
 
-        // Add normalized sRGB JPEG image to PDF
-        doc.addImage(norm.dataUrl, 'JPEG', posX, posY, renderW, renderH);
+        // Add normalized sRGB image to PDF
+        const imageFormat = (norm.dataUrl && norm.dataUrl.startsWith('data:image/png')) ? 'PNG' : 'JPEG';
+        doc.addImage(norm.dataUrl, imageFormat, posX, posY, renderW, renderH);
 
         // Footer Page Numbering (Page X of 4)
         doc.setFont('helvetica', 'normal');
